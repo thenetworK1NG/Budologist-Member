@@ -1,5 +1,6 @@
 import { saveMember } from '../firebase.js'
 import { SignaturePad } from '../signature.js'
+import { savePhoto } from '../localPhotos.js'
 
 let sigPad = null
 let pendingData = null
@@ -140,7 +141,9 @@ export function renderAddMember(container) {
     btn.innerHTML = '<span style="display:inline-block;width:16px;height:16px;border:2px solid #000;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;margin-right:8px"></span>Saving...'
 
     try {
-      await saveMember(pendingData, file)
+      await saveMember(pendingData)
+      const photoKey = `photo-${pendingData.memberNumber}-${Date.now()}`
+      await savePhoto(photoKey, file)
       showSuccess(container)
     } catch (err) {
       console.error(err)

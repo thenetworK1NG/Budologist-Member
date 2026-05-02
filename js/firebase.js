@@ -2,9 +2,6 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/fireba
 import {
   getFirestore, collection, addDoc, getDocs, query, orderBy, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
-import {
-  getStorage, ref, uploadBytes, getDownloadURL
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js'
 
 const firebaseConfig = {
   apiKey: "AIzaSyCW625XFVSBubJXeg7TOgjiiCNVg9ESipc",
@@ -18,7 +15,6 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig)
 const db = getFirestore(firebaseApp)
-const storage = getStorage(firebaseApp)
 
 export async function fetchMembers() {
   const q = query(collection(db, 'members'), orderBy('dateAdded', 'desc'))
@@ -39,14 +35,10 @@ export async function fetchAnalytics() {
   return { total: snap.size, basic, premium, active, expired }
 }
 
-export async function saveMember(data, photoFile) {
+export async function saveMember(data) {
   const dateAdded = new Date(data.date + 'T00:00:00')
   const expiryDate = new Date(dateAdded)
   expiryDate.setFullYear(expiryDate.getFullYear() + 1)
-
-  const photoRef = ref(storage, `id-photos/${data.memberNumber.trim()}-${Date.now()}`)
-  await uploadBytes(photoRef, photoFile)
-  const idPhotoUrl = await getDownloadURL(photoRef)
 
   await addDoc(collection(db, 'members'), {
     employeeName: data.employeeName.trim(),
@@ -57,7 +49,6 @@ export async function saveMember(data, photoFile) {
     phone: data.phone.trim(),
     signature: data.signature,
     dateAdded: Timestamp.fromDate(dateAdded),
-    expiryDate: Timestamp.fromDate(expiryDate),
-    idPhotoUrl
+    expiryDate: Timestamp.fromDate(expiryDate)
   })
 }
