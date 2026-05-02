@@ -1,11 +1,13 @@
 /* ============================================================
-   firebase.js — Firebase init + Firestore helpers
+   firebase.js — Firebase Realtime Database (no Firestore needed)
    Uses Firebase Compat SDK (loaded via CDN in index.html)
+   Database URL: https://budmemberapp-default-rtdb.firebaseio.com
    ============================================================ */
 
 const _firebaseConfig = {
   apiKey: "AIzaSyCW625XFVSBubJXeg7TOgjiiCNVg9ESipc",
   authDomain: "budmemberapp.firebaseapp.com",
+  databaseURL: "https://budmemberapp-default-rtdb.firebaseio.com",
   projectId: "budmemberapp",
   storageBucket: "budmemberapp.firebasestorage.app",
   messagingSenderId: "269040218229",
@@ -14,30 +16,20 @@ const _firebaseConfig = {
 };
 
 firebase.initializeApp(_firebaseConfig);
-
-const db = firebase.firestore();
-
-/* Enable offline persistence so the app works without internet */
-db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-  if (err.code === 'failed-precondition') {
-    console.warn('Firestore persistence: multiple tabs open.');
-  } else if (err.code === 'unimplemented') {
-    console.warn('Firestore persistence: not supported in this browser.');
-  }
-});
+const db = firebase.database();
+/* Realtime Database caches reads automatically — no extra setup needed */
 
 /* ------------------------------------------------------------------ */
-/*  AUTO-NUMBER: use a metadata counter document for atomic increment  */
+/*  AUTO-NUMBER: atomic counter using RTDB transaction                 */
 /* ------------------------------------------------------------------ */
 
 /**
  * Preview the next auto-generated member number without consuming it.
- * Safe to call on form load.
  */
 async function peekNextMemberNumber() {
   try {
-    const doc = await db.collection('metadata').doc('counter').get();
-    const current = doc.exists ? (doc.data().lastMemberNumber || 0) : 0;
+    const snap = await db.ref('metadata/counter').once('value');
+    const current = snap.val() || 0;
     return `BUD-${String(current + 1).padStart(3, '0')}`;
   } catch (_) {
     return 'BUD-001';
@@ -46,18 +38,12 @@ async function peekNextMemberNumber() {
 
 /**
  * Atomically increment the counter and return the new member number.
- * Call this only when actually saving a new member.
  */
 async function claimNextMemberNumber() {
-  const counterRef = db.collection('metadata').doc('counter');
   let memberNumber = 'BUD-001';
-  await db.runTransaction(async tx => {
-    const doc = await tx.get(counterRef);
-    const current = doc.exists ? (doc.data().lastMemberNumber || 0) : 0;
-    const next = current + 1;
-    memberNumber = `BUD-${String(next).padStart(3, '0')}`;
-    tx.set(counterRef, { lastMemberNumber: next }, { merge: true });
-  });
+  const result = await db.ref('metadata/counter').transaction(current => (current || 0) + 1);
+  const next = result.snapshot.val();
+  memberNumber = `BUD-${String(next).padStart(3, '0')}`;
   return memberNumber;
 }
 
@@ -66,15 +52,12 @@ async function claimNextMemberNumber() {
 /* ------------------------------------------------------------------ */
 
 /**
- * Add a new member to Firestore.
- * @param {Object} formData  — raw form values
- * @param {boolean} autoNumber — true = use atomic counter; false = use formData.memberNumber
- * @returns {{ id: string, memberNumber: string }}
+ * Add a new member to Realtime Database.
+ * Dates are stored as millisecond timestamps (plain numbers).
  */
 async function addMember(formData, autoNumber) {
-  /* Parse the user-supplied date string (YYYY-MM-DD) as local date */
   const [y, m, d] = formData.date.split('-').map(Number);
-  const dateAdded = new Date(y, m - 1, d);
+  const dateAdded  = new Date(y, m - 1, d);
   const expiryDate = new Date(y, m - 1, d);
   expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
@@ -89,45 +72,45 @@ async function addMember(formData, autoNumber) {
     memberName:      formData.memberName.trim(),
     idNumber:        formData.idNumber.trim(),
     phoneNumber:     formData.phoneNumber.trim(),
-    dateAdded:       firebase.firestore.Timestamp.fromDate(dateAdded),
-    expiryDate:      firebase.firestore.Timestamp.fromDate(expiryDate),
-    createdAt:       firebase.firestore.FieldValue.serverTimestamp()
+    dateAdded:       dateAdded.getTime(),
+    expiryDate:      expiryDate.getTime(),
+    createdAt:       firebase.database.ServerValue.TIMESTAMP
   };
 
-  const docRef = await db.collection('members').add(payload);
-  return { id: docRef.id, memberNumber };
+  const ref = await db.ref('members').push(payload);
+  return { id: ref.key, memberNumber };
 }
 
 /**
- * Fetch all members ordered by most recently created.
- * @returns {Promise<Array>}
+ * Fetch all members ordered by most recently created (newest first).
  */
 async function getAllMembers() {
-  const snap = await db.collection('members')
-    .orderBy('createdAt', 'desc')
-    .get();
-
-  return snap.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id:             doc.id,
-      employeeName:   data.employeeName,
-      membershipType: data.membershipType,
-      memberNumber:   data.memberNumber,
-      memberName:     data.memberName,
-      idNumber:       data.idNumber,
-      phoneNumber:    data.phoneNumber,
-      dateAdded:      data.dateAdded?.toDate()  ?? null,
-      expiryDate:     data.expiryDate?.toDate() ?? null,
-      createdAt:      data.createdAt?.toDate()  ?? null
-    };
+  const snap = await db.ref('members').orderByChild('createdAt').once('value');
+  const members = [];
+  snap.forEach(child => {
+    const data = child.val();
+    members.push({
+      id:             child.key,
+      employeeName:   data.employeeName   || '',
+      membershipType: data.membershipType || '',
+      memberNumber:   data.memberNumber   || '',
+      memberName:     data.memberName     || '',
+      idNumber:       data.idNumber       || '',
+      phoneNumber:    data.phoneNumber    || '',
+      dateAdded:      data.dateAdded  ? new Date(data.dateAdded)  : null,
+      expiryDate:     data.expiryDate ? new Date(data.expiryDate) : null,
+      createdAt:      data.createdAt  ? new Date(data.createdAt)  : null
+    });
   });
+  /* RTDB orderByChild returns ascending; reverse for newest-first */
+  return members.reverse();
 }
 
 /**
- * Delete a member document by Firestore document ID.
- * @param {string} docId
+ * Delete a member by its RTDB push key.
  */
 async function deleteMember(docId) {
-  await db.collection('members').doc(docId).delete();
+  await db.ref('members').child(docId).remove();
 }
+
+

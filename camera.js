@@ -1,18 +1,74 @@
 /* ============================================================
-   camera.js — ID photo capture, local download only (no cloud)
+   camera.js — ID photo capture + local IndexedDB storage
+   NO cloud / third-party storage — everything stays on device
    ============================================================ */
 
 let _videoStream = null;
 
+/* ─── IndexedDB image store (100% local, no network) ────────── */
+const _IDB_NAME  = 'budologist-images';
+const _IDB_STORE = 'id-photos';
+
+function _openImgDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(_IDB_NAME, 1);
+    req.onupgradeneeded = e => {
+      e.target.result.createObjectStore(_IDB_STORE, { keyPath: 'memberNumber' });
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
 /**
- * Open the camera modal, let the employee capture the member's ID,
- * and trigger a local download of the image.
+ * Save a base64 data URL image keyed by member number into IndexedDB.
+ * Completely local — no network request.
+ */
+async function saveIdImageLocally(memberNumber, dataUrl) {
+  try {
+    const db = await _openImgDB();
+    await new Promise((resolve, reject) => {
+      const tx  = db.transaction(_IDB_STORE, 'readwrite');
+      const req = tx.objectStore(_IDB_STORE).put({
+        memberNumber, dataUrl,
+        savedAt: new Date().toISOString()
+      });
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  } catch (e) {
+    console.warn('Could not save image to local IndexedDB:', e);
+  }
+}
+
+/**
+ * Retrieve a stored ID photo data URL from IndexedDB.
+ * Returns null if not found.
+ */
+async function getIdImageLocally(memberNumber) {
+  try {
+    const db = await _openImgDB();
+    return await new Promise((resolve, reject) => {
+      const tx  = db.transaction(_IDB_STORE, 'readonly');
+      const req = tx.objectStore(_IDB_STORE).get(memberNumber);
+      req.onsuccess = e => resolve(e.target.result?.dataUrl || null);
+      req.onerror   = e => reject(e.target.error);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Open the camera modal, capture the member's ID,
+ * save to local IndexedDB AND download to device.
  *
  * @param {string} memberName
  * @param {string} idNumber
+ * @param {string} memberNumber  — IndexedDB key
  * @returns {Promise<'captured'|'file'|'skipped'>}
  */
-function initCamera(memberName, idNumber) {
+function initCamera(memberName, idNumber, memberNumber) {
   return new Promise(resolve => {
     const modal      = document.getElementById('cameraModal');
     const video      = document.getElementById('cameraVideo');
@@ -85,8 +141,12 @@ function initCamera(memberName, idNumber) {
       statusEl.textContent = 'Position the ID card in frame, then tap Capture.';
     };
 
-    /* ----- Save & download from canvas capture ----- */
+    /* ----- Save: store in IndexedDB + download to device ----- */
     saveBtn.onclick = () => {
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      /* 1 — Persist in local IndexedDB (viewable later in member detail) */
+      saveIdImageLocally(memberNumber, dataUrl);
+      /* 2 — Also download as file to device storage */
       canvas.toBlob(blob => {
         _triggerDownload(blob, memberName, idNumber, 'jpg');
         _closeCamera();
@@ -99,12 +159,17 @@ function initCamera(memberName, idNumber) {
       const file = fileInput.files[0];
       if (!file) return;
 
-      /* Re-download the file with a standardised filename */
+      /* Save to IndexedDB via FileReader */
+      const reader = new FileReader();
+      reader.onload = e => saveIdImageLocally(memberNumber, e.target.result);
+      reader.readAsDataURL(file);
+
+      /* Download with standardised filename */
       const ext = file.type === 'image/png' ? 'png' : 'jpg';
       _triggerDownload(file, memberName, idNumber, ext);
       _closeCamera();
       resolve('file');
-    };
+    ;}
 
     /* ----- Skip ----- */
     skipBtn.onclick = () => {

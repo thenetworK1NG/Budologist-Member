@@ -307,6 +307,13 @@
             <span id="detailExpiry" class="detail-value"></span>
           </div>
         </div>
+
+        <!-- ID Photo stored locally in IndexedDB — no cloud -->
+        <div id="detailIdPhotoWrap" style="margin-top:18px" hidden>
+          <span style="display:block;margin-bottom:8px;font-size:0.7rem;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px">ID Photo (Saved Locally)</span>
+          <img id="detailIdPhoto" alt="Member ID photo"
+               style="width:100%;border-radius:10px;border:1px solid var(--border);max-height:240px;object-fit:cover;">
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -371,7 +378,7 @@
   <!-- ══════════════════ SCRIPTS ══════════════════ -->
   <!-- Firebase Compat (v10) -->
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

@@ -210,6 +210,16 @@ function openDetail(id) {
   stEl.className   = `chip chip--${st}`;
 
   document.getElementById('deleteBtn').onclick = () => confirmDelete(id);
+
+  /* Load local ID photo from IndexedDB (stored on device, no cloud) */
+  const imgWrap = document.getElementById('detailIdPhotoWrap');
+  const imgEl   = document.getElementById('detailIdPhoto');
+  imgWrap.hidden = true;
+  imgEl.src = '';
+  getIdImageLocally(m.memberNumber).then(dataUrl => {
+    if (dataUrl) { imgEl.src = dataUrl; imgWrap.hidden = false; }
+  }).catch(() => {});
+
   document.getElementById('memberDetailModal').hidden = false;
 }
 
@@ -438,7 +448,7 @@ document.getElementById('addMemberForm').addEventListener('submit', async e => {
     await refreshMemberNumber();
 
     /* Open camera to capture ID photo */
-    await initCamera(savedName, savedId);
+    await initCamera(savedName, savedId, memberNumber);
 
   } catch (err) {
     console.error(err);
@@ -451,7 +461,8 @@ document.getElementById('addMemberForm').addEventListener('submit', async e => {
 
 /* ─── Bootstrap ──────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadMembers();
+  /* Always show the UI even if Firebase fails on first load */
+  try { await loadMembers(); } catch (_) {}
   await initForm();
   switchTab('analytics');
 });
