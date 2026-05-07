@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script>
+    // GitHub Pages SPA / PWA fix:
+    // Redirect any 404 back to index.html so the service worker can take over.
+    window.location.replace(
+      window.location.origin +
+      window.location.pathname.replace(/\/[^/]*$/, '/') +
+      'index.html'
+    );
+  </script>
+</head>
+<body></body>
+</html>

@@ -1,10 +1,9 @@
 /* ============================================================
    Budologist Service Worker — cache-first for local assets
    ============================================================ */
-const CACHE = 'budologist-v1';
+const CACHE = 'budologist-v2';
 
 const LOCAL_ASSETS = [
-  './',
   './index.html',
   './style.css',
   './app.js',
@@ -33,14 +32,25 @@ self.addEventListener('activate', event => {
 });
 
 /* Fetch strategy:
-   - CDN / external origins  → network first, fallback to cache
-   - Local assets            → cache first, fallback to network and cache result */
+   - Navigation requests  → always serve index.html from cache (fixes PWA 404)
+   - CDN / external       → network first, fallback to cache
+   - Local assets         → cache first, fallback to network */
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  /* Skip non-GET requests */
   if (request.method !== 'GET') return;
+
+  /* Navigation requests (opening the app, refreshing) → serve index.html */
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      caches.match('./index.html').then(cached => {
+        if (cached) return cached;
+        return fetch('./index.html');
+      })
+    );
+    return;
+  }
 
   /* External CDN resources — network first */
   if (url.origin !== location.origin) {
@@ -72,3 +82,5 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+
+
