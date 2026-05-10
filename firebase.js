@@ -99,7 +99,9 @@ async function getAllMembers() {
       phoneNumber:    data.phoneNumber    || '',
       dateAdded:      data.dateAdded  ? new Date(data.dateAdded)  : null,
       expiryDate:     data.expiryDate ? new Date(data.expiryDate) : null,
-      createdAt:      data.createdAt  ? new Date(data.createdAt)  : null
+      createdAt:      data.createdAt  ? new Date(data.createdAt)  : null,
+      totalSpent:     data.totalSpent    || 0,
+      purchaseCount:  data.purchaseCount || 0
     });
   });
   /* RTDB orderByChild returns ascending; reverse for newest-first */
@@ -111,6 +113,45 @@ async function getAllMembers() {
  */
 async function deleteMember(docId) {
   await db.ref('members').child(docId).remove();
+}
+
+/**
+ * Update an existing member's details.
+ * Pass only the fields you want to change.
+ * dateAdded and expiryDate should be 'YYYY-MM-DD' strings if provided.
+ */
+async function updateMember(id, updates) {
+  const payload = {};
+
+  if (updates.employeeName   !== undefined) payload.employeeName   = updates.employeeName.trim();
+  if (updates.membershipType !== undefined) payload.membershipType = updates.membershipType;
+  if (updates.memberNumber   !== undefined) payload.memberNumber   = updates.memberNumber.trim();
+  if (updates.memberName     !== undefined) payload.memberName     = updates.memberName.trim();
+  if (updates.idNumber       !== undefined) payload.idNumber       = updates.idNumber.trim();
+  if (updates.phoneNumber    !== undefined) payload.phoneNumber    = updates.phoneNumber.trim();
+
+  if (updates.dateAdded) {
+    const [y, mo, d] = updates.dateAdded.split('-').map(Number);
+    payload.dateAdded = new Date(y, mo - 1, d).getTime();
+  }
+
+  if (updates.expiryDate) {
+    const [y, mo, d] = updates.expiryDate.split('-').map(Number);
+    payload.expiryDate = new Date(y, mo - 1, d).getTime();
+  }
+
+  await db.ref('members').child(id).update(payload);
+}
+
+/**
+ * Reset a member's purchase stats to zero.
+ * Does NOT delete the underlying sale records — only clears the cached totals.
+ */
+async function clearMemberPurchaseHistory(id) {
+  await db.ref('members').child(id).update({
+    totalSpent:    0,
+    purchaseCount: 0
+  });
 }
 
 

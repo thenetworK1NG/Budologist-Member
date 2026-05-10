@@ -8,6 +8,7 @@ let deferredInstall    = null;
 let monthlyChart       = null;
 let typeChart          = null;
 let isAutoNumber       = true; /* toggle state for member number field */
+let activeFilter       = 'all'; /* active missing-info filter */
 
 /* ─── Service Worker Registration ───────────────────────── */
 if ('serviceWorker' in navigator) {
@@ -50,7 +51,7 @@ function switchTab(name) {
     sec.classList.toggle('active', active);
   });
   if (name === 'analytics')  renderAnalytics();
-  if (name === 'members')    renderMembers(allMembers);
+  if (name === 'members')    applyFilters();
 }
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -111,7 +112,8 @@ async function loadMembers() {
   setLoader('analyticsLoader', true);
   try {
     allMembers = await getAllMembers();
-    renderMembers(allMembers);
+    updateFilterCounts();
+    applyFilters();
     renderAnalytics();
   } catch (err) {
     console.error(err);
@@ -147,6 +149,12 @@ function renderMembers(list) {
       : `${days}d remaining`;
     const chipLabel = st === 'expiring' ? 'Expiring Soon' : cap(st);
 
+    /* Detect missing fields */
+    const missing = [];
+    if (!m.idNumber    || !m.idNumber.trim())    missing.push('ID Number');
+    if (!m.phoneNumber || !m.phoneNumber.trim()) missing.push('Phone');
+    if (!m.memberName  || !m.memberName.trim())  missing.push('Name');
+
     return `
       <div class="member-card member-card--${st}" role="button" tabindex="0"
            onclick="openDetail('${esc(m.id)}')"
@@ -155,30 +163,80 @@ function renderMembers(list) {
           <span class="mc-number">${esc(m.memberNumber)}</span>
           <span class="chip chip--${st}">${chipLabel}</span>
         </div>
-        <div class="mc-name">${esc(m.memberName)}</div>
+        <div class="mc-name">${esc(m.memberName) || '<em style="opacity:0.5">No name</em>'}</div>
         <div class="mc-meta">
           <span class="badge badge--${(m.membershipType||'').toLowerCase()}">${esc(m.membershipType)}</span>
-          <span class="mc-phone">${esc(m.phoneNumber)}</span>
+          <span class="mc-phone">${esc(m.phoneNumber) || '<span style="opacity:0.45">No phone</span>'}</span>
         </div>
         <div class="mc-expiry">
           <span class="mc-expiry-date">Expires ${fmt(m.expiryDate)}</span>
           <span class="mc-days mc-days--${st}">${label}</span>
         </div>
+        ${missing.length ? `<div class="mc-missing">⚠ Missing: ${missing.join(' · ')}</div>` : ''}
       </div>`;
   }).join('');
 }
 
-/* ─── Search ─────────────────────────────────────────────── */
-document.getElementById('searchInput').addEventListener('input', e => {
-  const q = e.target.value.toLowerCase().trim();
-  if (!q) { renderMembers(allMembers); return; }
-  renderMembers(allMembers.filter(m =>
-    (m.memberName   || '').toLowerCase().includes(q) ||
-    (m.idNumber     || '').toLowerCase().includes(q) ||
-    (m.memberNumber || '').toLowerCase().includes(q) ||
-    (m.phoneNumber  || '').toLowerCase().includes(q)
-  ));
+/* ─── Filter & Search ───────────────────────────────────────── */
+function applyFilters() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  let list = allMembers;
+
+  /* Search */
+  if (q) {
+    list = list.filter(m =>
+      (m.memberName   || '').toLowerCase().includes(q) ||
+      (m.idNumber     || '').toLowerCase().includes(q) ||
+      (m.memberNumber || '').toLowerCase().includes(q) ||
+      (m.phoneNumber  || '').toLowerCase().includes(q)
+    );
+  }
+
+  /* Missing-field filter */
+  switch (activeFilter) {
+    case 'missing-id':
+      list = list.filter(m => !m.idNumber    || !m.idNumber.trim());    break;
+    case 'missing-phone':
+      list = list.filter(m => !m.phoneNumber || !m.phoneNumber.trim()); break;
+    case 'missing-name':
+      list = list.filter(m => !m.memberName  || !m.memberName.trim());  break;
+    case 'any-missing':
+      list = list.filter(m =>
+        !m.idNumber    || !m.idNumber.trim()    ||
+        !m.phoneNumber || !m.phoneNumber.trim() ||
+        !m.memberName  || !m.memberName.trim()
+      ); break;
+  }
+
+  renderMembers(list);
+}
+
+function updateFilterCounts() {
+  const missingId    = allMembers.filter(m => !m.idNumber    || !m.idNumber.trim()).length;
+  const missingPhone = allMembers.filter(m => !m.phoneNumber || !m.phoneNumber.trim()).length;
+  const missingName  = allMembers.filter(m => !m.memberName  || !m.memberName.trim()).length;
+  const anyMissing   = allMembers.filter(m =>
+    !m.idNumber    || !m.idNumber.trim()    ||
+    !m.phoneNumber || !m.phoneNumber.trim() ||
+    !m.memberName  || !m.memberName.trim()
+  ).length;
+
+  document.getElementById('chipMissingId').textContent    = `⚠ No ID${missingId    ? ` (${missingId})`    : ''}`;
+  document.getElementById('chipMissingPhone').textContent = `⚠ No Phone${missingPhone ? ` (${missingPhone})` : ''}`;
+  document.getElementById('chipMissingName').textContent  = `⚠ No Name${missingName  ? ` (${missingName})`  : ''}`;
+  document.getElementById('chipAnyMissing').textContent   = `⚠ Any Missing${anyMissing   ? ` (${anyMissing})`   : ''}`;
+}
+
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    activeFilter = chip.dataset.filter;
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    applyFilters();
+  });
 });
+
+document.getElementById('searchInput').addEventListener('input', () => applyFilters());
 
 /* ─── Member Detail Modal ────────────────────────────────── */
 function openDetail(id) {
@@ -201,6 +259,12 @@ function openDetail(id) {
   document.getElementById('detailAdded').textContent    = fmt(m.dateAdded);
   document.getElementById('detailExpiry').textContent   = fmt(m.expiryDate);
 
+  /* Purchase stats written by the stock app */
+  const spent = Number(m.totalSpent || 0);
+  document.getElementById('detailTotalSpent').textContent =
+    'R\u202f' + spent.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  document.getElementById('detailPurchaseCount').textContent = m.purchaseCount || 0;
+
   const typeEl = document.getElementById('detailType');
   typeEl.textContent = m.membershipType;
   typeEl.className   = `badge badge--${(m.membershipType || '').toLowerCase()}`;
@@ -210,6 +274,8 @@ function openDetail(id) {
   stEl.className   = `chip chip--${st}`;
 
   document.getElementById('deleteBtn').onclick = () => confirmDelete(id);
+  document.getElementById('editBtn').onclick    = () => openEditModal(id);
+  document.getElementById('clearHistoryBtn').onclick = () => confirmClearHistory(id);
 
   /* Load local ID photo from IndexedDB (stored on device, no cloud) */
   const imgWrap = document.getElementById('detailIdPhotoWrap');
@@ -241,12 +307,31 @@ async function confirmDelete(id) {
     await deleteMember(id);
     allMembers = allMembers.filter(x => x.id !== id);
     closeDetail();
-    renderMembers(allMembers);
+    updateFilterCounts();
+    applyFilters();
     renderAnalytics();
     showToast(`${m.memberName} removed.`, 'success');
   } catch (err) {
     console.error(err);
     showToast('Could not remove member.', 'error');
+  }
+}
+
+async function confirmClearHistory(id) {
+  const m = allMembers.find(x => x.id === id);
+  if (!m) return;
+  if (!confirm(`Clear purchase history for ${m.memberName} (${m.memberNumber})?\n\nThis resets their Total Spent and Items Bought to zero.\nSale records in the stock app are NOT deleted.`)) return;
+  try {
+    await clearMemberPurchaseHistory(id);
+    m.totalSpent    = 0;
+    m.purchaseCount = 0;
+    /* Refresh the stats displayed in the open modal */
+    document.getElementById('detailTotalSpent').textContent    = 'R\u202f0.00';
+    document.getElementById('detailPurchaseCount').textContent = '0';
+    showToast('Purchase history cleared.', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not clear history.', 'error');
   }
 }
 
@@ -456,6 +541,92 @@ document.getElementById('addMemberForm').addEventListener('submit', async e => {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '+ Add Member &amp; Capture ID';
+  }
+});
+
+/* ─── Edit Member Modal ──────────────────────────────────── */
+function calcEditExpiry() {
+  const val = document.getElementById('editDateAdded').value;
+  if (!val) { document.getElementById('editExpiryDate').value = ''; return; }
+  const d = new Date(val);
+  d.setFullYear(d.getFullYear() + 1);
+  document.getElementById('editExpiryDate').value = d.toISOString().slice(0, 10);
+}
+
+function openEditModal(id) {
+  const m = allMembers.find(x => x.id === id);
+  if (!m) return;
+
+  closeDetail(); /* close the detail modal first */
+
+  document.getElementById('editMemberId').value        = m.id;
+  document.getElementById('editEmployeeName').value    = m.employeeName    || '';
+  document.getElementById('editMembershipType').value  = m.membershipType  || 'Basic';
+  document.getElementById('editMemberNumber').value    = m.memberNumber    || '';
+  document.getElementById('editMemberName').value      = m.memberName      || '';
+  document.getElementById('editIdNumber').value        = m.idNumber        || '';
+  document.getElementById('editPhone').value           = m.phoneNumber     || '';
+
+  const toInputDate = d => {
+    if (!d) return '';
+    const dt = d instanceof Date ? d : new Date(d);
+    return dt.toISOString().slice(0, 10);
+  };
+  document.getElementById('editDateAdded').value   = toInputDate(m.dateAdded);
+  calcEditExpiry();
+
+  document.getElementById('editMemberModal').hidden = false;
+}
+
+function closeEditModal() {
+  document.getElementById('editMemberModal').hidden = true;
+}
+
+document.getElementById('closeEditModal').addEventListener('click', closeEditModal);
+document.getElementById('cancelEditBtn').addEventListener('click', closeEditModal);
+document.getElementById('editMemberModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('editMemberModal')) closeEditModal();
+});
+document.getElementById('editDateAdded').addEventListener('input', calcEditExpiry);
+
+document.getElementById('saveEditBtn').addEventListener('click', async () => {
+  const id  = document.getElementById('editMemberId').value;
+  const btn = document.getElementById('saveEditBtn');
+  const origHTML = btn.innerHTML;
+
+  const updates = {
+    employeeName:   document.getElementById('editEmployeeName').value,
+    membershipType: document.getElementById('editMembershipType').value,
+    memberNumber:   document.getElementById('editMemberNumber').value,
+    memberName:     document.getElementById('editMemberName').value,
+    idNumber:       document.getElementById('editIdNumber').value,
+    phoneNumber:    document.getElementById('editPhone').value,
+    dateAdded:      document.getElementById('editDateAdded').value,
+    expiryDate:     document.getElementById('editExpiryDate').value
+  };
+
+  if (!updates.memberName.trim()) {
+    showToast('Member name cannot be empty.', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-sm"></span> Saving…';
+
+  try {
+    await updateMember(id, updates);
+    allMembers = await getAllMembers();
+    closeEditModal();
+    updateFilterCounts();
+    applyFilters();
+    renderAnalytics();
+    showToast('Member updated successfully!', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to save changes.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHTML;
   }
 });
 
