@@ -349,6 +349,101 @@ a { color: var(--accent); }
   border-top: 1px solid var(--border);
 }
 
+/* Auth key badge on member cards */
+.mc-auth-key {
+  font-family: 'Courier New', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--accent);
+  margin-top: 5px;
+  opacity: 0.85;
+}
+
+/* Card status badge on member cards */
+.mc-card-status {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.card-status--none      { background: rgba(239,68,68,0.12);    color: #ef4444; }
+.card-status--printing  { background: rgba(245,158,11,0.14);   color: #f59e0b; }
+.card-status--printed   { background: rgba(59,130,246,0.13);   color: #60a5fa; }
+.card-status--collected { background: rgba(62,207,110,0.14);   color: #3ecf6e; }
+
+/* Card status section in detail modal */
+.card-status-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.card-status-chip {
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+/* Card status filter chips */
+.filter-chip--card-none      { border-color: rgba(239,68,68,0.4);    color: #ef4444; }
+.filter-chip--card-none.active,
+.filter-chip--card-none:hover { background: rgba(239,68,68,0.12); border-color: #ef4444; }
+.filter-chip--card-printing  { border-color: rgba(245,158,11,0.4);   color: #f59e0b; }
+.filter-chip--card-printing.active,
+.filter-chip--card-printing:hover { background: rgba(245,158,11,0.12); border-color: #f59e0b; }
+.filter-chip--card-printed   { border-color: rgba(59,130,246,0.4);   color: #60a5fa; }
+.filter-chip--card-printed.active,
+.filter-chip--card-printed:hover { background: rgba(59,130,246,0.12); border-color: #60a5fa; }
+.filter-chip--card-collected { border-color: rgba(62,207,110,0.4);   color: #3ecf6e; }
+.filter-chip--card-collected.active,
+.filter-chip--card-collected:hover { background: rgba(62,207,110,0.12); border-color: #3ecf6e; }
+
+/* Auth key section in detail modal */
+.auth-key-display {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--accent-dim);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(62,207,110,0.25);
+}
+
+.auth-key-value {
+  font-family: 'Courier New', monospace;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: 8px;
+  color: var(--accent);
+}
+
+/* Auth key row in edit modal */
+.auth-key-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.auth-key-input {
+  font-family: 'Courier New', monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 6px;
+  text-align: center;
+  color: var(--accent);
+  flex: 0 0 110px;
+}
+
 /* Edit modal hint text */
 .edit-hint {
   display: block;

@@ -144,7 +144,7 @@
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input type="search" id="searchInput" class="search-input"
-                 placeholder="Search by name, ID number, member no. or phone…"
+                 placeholder="Search by name, ID, member no., phone or auth key…"
                  autocomplete="off" spellcheck="false">
         </div>
         <div class="filter-chips" id="filterChips">
@@ -153,6 +153,10 @@
           <button class="filter-chip filter-chip--warn" data-filter="missing-id"    id="chipMissingId">⚠ No ID</button>
           <button class="filter-chip filter-chip--warn" data-filter="missing-phone" id="chipMissingPhone">⚠ No Phone</button>
           <button class="filter-chip filter-chip--warn" data-filter="missing-name"  id="chipMissingName">⚠ No Name</button>
+          <button class="filter-chip filter-chip--card-none"      data-filter="card-none"      id="chipCardNone">❌ No Card</button>
+          <button class="filter-chip filter-chip--card-printing"  data-filter="card-printing"  id="chipCardPrinting">🟡 Printing</button>
+          <button class="filter-chip filter-chip--card-printed"   data-filter="card-printed"   id="chipCardPrinted">🟢 Printed</button>
+          <button class="filter-chip filter-chip--card-collected" data-filter="card-collected" id="chipCardCollected">✅ Collected</button>
         </div>
       </div>
 
@@ -315,6 +319,18 @@
           </div>
         </div>
 
+        <!-- Auth Key -->
+        <div id="detailAuthKeyWrap" class="auth-key-display" hidden>
+          <span class="detail-label" style="font-size:0.7rem;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px">🔐 Card Authenticity Key</span>
+          <span id="detailAuthKey" class="auth-key-value">—</span>
+        </div>
+
+        <!-- Card Status -->
+        <div class="card-status-display">
+          <span style="font-size:0.7rem;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px">🪶 Member Card</span>
+          <span id="detailCardStatus" class="card-status-chip"></span>
+        </div>
+
         <!-- Purchase stats from stock app -->
         <div class="purchase-stats" id="detailPurchaseStats">
           <div class="ps-header">
@@ -427,6 +443,27 @@
           <div class="form-group">
             <label class="form-label" for="editPhone">Phone Number</label>
             <input type="tel" id="editPhone" class="form-input" placeholder="e.g. 082 123 4567">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="editCardStatus">🪶 Member Card Status</label>
+            <select id="editCardStatus" class="form-input form-select">
+              <option value="none">❌ No Card</option>
+              <option value="printing">🟡 In Printing</option>
+              <option value="printed">🟢 Printed</option>
+              <option value="collected">✅ Collected</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">🔐 Card Authenticity Key</label>
+            <div class="auth-key-row">
+              <input type="text" id="editAuthKey" class="form-input auth-key-input"
+                     placeholder="No key yet" readonly maxlength="5"
+                     inputmode="numeric" pattern="[0-9]{5}">
+              <button type="button" id="generateAuthKeyBtn" class="btn btn-secondary">🎲 Generate Key</button>
+            </div>
+            <span class="edit-hint">Unique 5-digit key printed on member's card for authenticity. Click Generate to create one.</span>
           </div>
 
           <div class="form-group">

@@ -48,6 +48,64 @@ async function claimNextMemberNumber() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  AUTH KEY                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Generate a unique 5-digit authenticity key.
+ * Reads all existing authKeys from the DB and retries until a non-duplicate
+ * is found.  With 100 000 possible values this handles thousands of members
+ * without collisions.
+ */
+async function generateUniqueAuthKey() {
+  const snap = await db.ref('members').once('value');
+  const used = new Set();
+  snap.forEach(child => {
+    const k = child.val().authKey;
+    if (k) used.add(String(k));
+  });
+
+  let key;
+  let attempts = 0;
+  do {
+    key = String(Math.floor(Math.random() * 100000)).padStart(5, '0');
+    attempts++;
+    if (attempts > 500) throw new Error('Could not generate a unique auth key.');
+  } while (used.has(key));
+
+  return key;
+}
+
+/**
+ * Look up a single member by their 5-digit auth key.
+ * Returns the member object or null if not found.
+ */
+async function findMemberByAuthKey(key) {
+  const snap = await db.ref('members').orderByChild('authKey').equalTo(key).once('value');
+  if (!snap.exists()) return null;
+  let result = null;
+  snap.forEach(child => {
+    const data = child.val();
+    result = {
+      id:             child.key,
+      employeeName:   data.employeeName   || '',
+      membershipType: data.membershipType || '',
+      memberNumber:   data.memberNumber   || '',
+      memberName:     data.memberName     || '',
+      idNumber:       data.idNumber       || '',
+      phoneNumber:    data.phoneNumber    || '',
+      authKey:        data.authKey        || '',
+      dateAdded:      data.dateAdded  ? new Date(data.dateAdded)  : null,
+      expiryDate:     data.expiryDate ? new Date(data.expiryDate) : null,
+      createdAt:      data.createdAt  ? new Date(data.createdAt)  : null,
+      totalSpent:     data.totalSpent    || 0,
+      purchaseCount:  data.purchaseCount || 0
+    };
+  });
+  return result;
+}
+
+/* ------------------------------------------------------------------ */
 /*  MEMBER CRUD                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -97,6 +155,8 @@ async function getAllMembers() {
       memberName:     data.memberName     || '',
       idNumber:       data.idNumber       || '',
       phoneNumber:    data.phoneNumber    || '',
+      authKey:        data.authKey        || '',
+      cardStatus:     data.cardStatus     || 'none',
       dateAdded:      data.dateAdded  ? new Date(data.dateAdded)  : null,
       expiryDate:     data.expiryDate ? new Date(data.expiryDate) : null,
       createdAt:      data.createdAt  ? new Date(data.createdAt)  : null,
@@ -129,7 +189,8 @@ async function updateMember(id, updates) {
   if (updates.memberName     !== undefined) payload.memberName     = updates.memberName.trim();
   if (updates.idNumber       !== undefined) payload.idNumber       = updates.idNumber.trim();
   if (updates.phoneNumber    !== undefined) payload.phoneNumber    = updates.phoneNumber.trim();
-
+  if (updates.authKey        !== undefined) payload.authKey        = updates.authKey.trim();
+  if (updates.cardStatus     !== undefined) payload.cardStatus     = updates.cardStatus;  if (updates.cardStatus     !== undefined) payload.cardStatus     = updates.cardStatus;
   if (updates.dateAdded) {
     const [y, mo, d] = updates.dateAdded.split('-').map(Number);
     payload.dateAdded = new Date(y, mo - 1, d).getTime();

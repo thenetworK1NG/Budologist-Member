@@ -79,6 +79,12 @@ function cap(str) {
   return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
 }
 
+/* Returns true when a number field has no actual digits (empty, whitespace,
+   or contains only punctuation like dots/commas). */
+function isMissingNumber(val) {
+  return !val || !val.trim() || !/\d/.test(val);
+}
+
 function showToast(msg, type = 'info') {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -129,6 +135,21 @@ function setLoader(id, show) {
   if (el) el.hidden = !show;
 }
 
+/* ─── Card Status Helpers ────────────────────────────────── */
+const CARD_STATUS_LABELS = {
+  none:      '❌ No Card',
+  printing:  '🟡 In Printing',
+  printed:   '🟢 Printed',
+  collected: '✅ Collected'
+};
+
+const CARD_STATUS_CLASS = {
+  none:      'card-status--none',
+  printing:  'card-status--printing',
+  printed:   'card-status--printed',
+  collected: 'card-status--collected'
+};
+
 /* ─── Members Grid ───────────────────────────────────────── */
 function renderMembers(list) {
   const grid  = document.getElementById('membersGrid');
@@ -151,9 +172,9 @@ function renderMembers(list) {
 
     /* Detect missing fields */
     const missing = [];
-    if (!m.idNumber    || !m.idNumber.trim())    missing.push('ID Number');
-    if (!m.phoneNumber || !m.phoneNumber.trim()) missing.push('Phone');
-    if (!m.memberName  || !m.memberName.trim())  missing.push('Name');
+    if (isMissingNumber(m.idNumber))               missing.push('ID Number');
+    if (isMissingNumber(m.phoneNumber))            missing.push('Phone');
+    if (!m.memberName  || !m.memberName.trim())    missing.push('Name');
 
     return `
       <div class="member-card member-card--${st}" role="button" tabindex="0"
@@ -173,6 +194,8 @@ function renderMembers(list) {
           <span class="mc-days mc-days--${st}">${label}</span>
         </div>
         ${missing.length ? `<div class="mc-missing">⚠ Missing: ${missing.join(' · ')}</div>` : ''}
+        ${m.authKey ? `<div class="mc-auth-key">🔐 ${esc(m.authKey)}</div>` : ''}
+        <div class="mc-card-status ${CARD_STATUS_CLASS[m.cardStatus||'none']}">${CARD_STATUS_LABELS[m.cardStatus||'none']}</div>
       </div>`;
   }).join('');
 }
@@ -188,36 +211,41 @@ function applyFilters() {
       (m.memberName   || '').toLowerCase().includes(q) ||
       (m.idNumber     || '').toLowerCase().includes(q) ||
       (m.memberNumber || '').toLowerCase().includes(q) ||
-      (m.phoneNumber  || '').toLowerCase().includes(q)
+      (m.phoneNumber  || '').toLowerCase().includes(q) ||
+      (m.authKey      || '').toLowerCase().includes(q)
     );
   }
 
   /* Missing-field filter */
   switch (activeFilter) {
     case 'missing-id':
-      list = list.filter(m => !m.idNumber    || !m.idNumber.trim());    break;
+      list = list.filter(m => isMissingNumber(m.idNumber));    break;
     case 'missing-phone':
-      list = list.filter(m => !m.phoneNumber || !m.phoneNumber.trim()); break;
+      list = list.filter(m => isMissingNumber(m.phoneNumber)); break;
     case 'missing-name':
       list = list.filter(m => !m.memberName  || !m.memberName.trim());  break;
     case 'any-missing':
       list = list.filter(m =>
-        !m.idNumber    || !m.idNumber.trim()    ||
-        !m.phoneNumber || !m.phoneNumber.trim() ||
+        isMissingNumber(m.idNumber)    ||
+        isMissingNumber(m.phoneNumber) ||
         !m.memberName  || !m.memberName.trim()
       ); break;
+    case 'card-none':      list = list.filter(m => (m.cardStatus || 'none') === 'none');      break;
+    case 'card-printing':  list = list.filter(m => (m.cardStatus || 'none') === 'printing');  break;
+    case 'card-printed':   list = list.filter(m => (m.cardStatus || 'none') === 'printed');   break;
+    case 'card-collected': list = list.filter(m => (m.cardStatus || 'none') === 'collected'); break;
   }
 
   renderMembers(list);
 }
 
 function updateFilterCounts() {
-  const missingId    = allMembers.filter(m => !m.idNumber    || !m.idNumber.trim()).length;
-  const missingPhone = allMembers.filter(m => !m.phoneNumber || !m.phoneNumber.trim()).length;
+  const missingId    = allMembers.filter(m => isMissingNumber(m.idNumber)).length;
+  const missingPhone = allMembers.filter(m => isMissingNumber(m.phoneNumber)).length;
   const missingName  = allMembers.filter(m => !m.memberName  || !m.memberName.trim()).length;
   const anyMissing   = allMembers.filter(m =>
-    !m.idNumber    || !m.idNumber.trim()    ||
-    !m.phoneNumber || !m.phoneNumber.trim() ||
+    isMissingNumber(m.idNumber)    ||
+    isMissingNumber(m.phoneNumber) ||
     !m.memberName  || !m.memberName.trim()
   ).length;
 
@@ -225,6 +253,15 @@ function updateFilterCounts() {
   document.getElementById('chipMissingPhone').textContent = `⚠ No Phone${missingPhone ? ` (${missingPhone})` : ''}`;
   document.getElementById('chipMissingName').textContent  = `⚠ No Name${missingName  ? ` (${missingName})`  : ''}`;
   document.getElementById('chipAnyMissing').textContent   = `⚠ Any Missing${anyMissing   ? ` (${anyMissing})`   : ''}`;
+
+  const cardNone      = allMembers.filter(m => (m.cardStatus || 'none') === 'none').length;
+  const cardPrinting  = allMembers.filter(m => (m.cardStatus || 'none') === 'printing').length;
+  const cardPrinted   = allMembers.filter(m => (m.cardStatus || 'none') === 'printed').length;
+  const cardCollected = allMembers.filter(m => (m.cardStatus || 'none') === 'collected').length;
+  document.getElementById('chipCardNone').textContent      = `❌ No Card${cardNone      ? ` (${cardNone})`      : ''}`;
+  document.getElementById('chipCardPrinting').textContent  = `🟡 Printing${cardPrinting  ? ` (${cardPrinting})`  : ''}`;
+  document.getElementById('chipCardPrinted').textContent   = `🟢 Printed${cardPrinted   ? ` (${cardPrinted})`   : ''}`;
+  document.getElementById('chipCardCollected').textContent = `✅ Collected${cardCollected ? ` (${cardCollected})` : ''}`;
 }
 
 document.querySelectorAll('.filter-chip').forEach(chip => {
@@ -258,6 +295,23 @@ function openDetail(id) {
   document.getElementById('detailEmployee').textContent = m.employeeName;
   document.getElementById('detailAdded').textContent    = fmt(m.dateAdded);
   document.getElementById('detailExpiry').textContent   = fmt(m.expiryDate);
+
+  /* Auth key */
+  const authKeyWrap = document.getElementById('detailAuthKeyWrap');
+  const authKeyEl   = document.getElementById('detailAuthKey');
+  if (m.authKey) {
+    authKeyEl.textContent = m.authKey;
+    authKeyWrap.hidden = false;
+  } else {
+    authKeyEl.textContent = '—';
+    authKeyWrap.hidden = true;
+  }
+
+  /* Card status */
+  const csEl = document.getElementById('detailCardStatus');
+  const cs   = m.cardStatus || 'none';
+  csEl.textContent = CARD_STATUS_LABELS[cs];
+  csEl.className   = `card-status-chip ${CARD_STATUS_CLASS[cs]}`;
 
   /* Purchase stats written by the stock app */
   const spent = Number(m.totalSpent || 0);
@@ -566,6 +620,8 @@ function openEditModal(id) {
   document.getElementById('editMemberName').value      = m.memberName      || '';
   document.getElementById('editIdNumber').value        = m.idNumber        || '';
   document.getElementById('editPhone').value           = m.phoneNumber     || '';
+  document.getElementById('editAuthKey').value          = m.authKey         || '';
+  document.getElementById('editCardStatus').value       = m.cardStatus      || 'none';
 
   const toInputDate = d => {
     if (!d) return '';
@@ -601,6 +657,8 @@ document.getElementById('saveEditBtn').addEventListener('click', async () => {
     memberName:     document.getElementById('editMemberName').value,
     idNumber:       document.getElementById('editIdNumber').value,
     phoneNumber:    document.getElementById('editPhone').value,
+    authKey:        document.getElementById('editAuthKey').value,
+    cardStatus:     document.getElementById('editCardStatus').value,
     dateAdded:      document.getElementById('editDateAdded').value,
     expiryDate:     document.getElementById('editExpiryDate').value
   };
@@ -627,6 +685,28 @@ document.getElementById('saveEditBtn').addEventListener('click', async () => {
   } finally {
     btn.disabled = false;
     btn.innerHTML = origHTML;
+  }
+});
+
+/* ─── Generate Auth Key Button ───────────────────────────── */
+document.getElementById('generateAuthKeyBtn').addEventListener('click', async () => {
+  const btn   = document.getElementById('generateAuthKeyBtn');
+  const input = document.getElementById('editAuthKey');
+  const prev  = btn.innerHTML;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  try {
+    const key = await generateUniqueAuthKey();
+    input.value = key;
+    showToast(`Auth key ${key} generated — remember to Save Changes.`, 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not generate a unique key. Try again.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = prev;
   }
 });
 
