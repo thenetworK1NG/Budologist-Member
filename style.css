@@ -461,6 +461,10 @@ a { color: var(--accent); }
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: background 0.15s;
 }
 .btn-change-key:hover { background: rgba(62,207,110,0.2); }
@@ -1298,6 +1302,10 @@ a { color: var(--accent); }
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: background 0.15s, border-color 0.15s;
 }
 .top-spenders-toggle:hover {
