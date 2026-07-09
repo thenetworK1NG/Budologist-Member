@@ -9,6 +9,7 @@ let monthlyChart       = null;
 let typeChart          = null;
 let isAutoNumber       = true; /* toggle state for member number field */
 let activeFilter       = 'all'; /* active missing-info filter */
+let activeSort         = 'default'; /* 'default' | 'newest' */
 
 /* ─── Service Worker Registration ───────────────────────── */
 if ('serviceWorker' in navigator) {
@@ -245,6 +246,14 @@ function applyFilters() {
     case 'card-collected': list = list.filter(m => (m.cardStatus || 'none') === 'collected'); break;
   }
 
+  /* Sort by member number descending when active */
+  if (activeSort === 'newest') {
+    list = [...list].sort((a, b) => {
+      const numOf = m => { const x = (m.memberNumber || '').match(/(\d+)$/); return x ? parseInt(x[1], 10) : 0; };
+      return numOf(b) - numOf(a);
+    });
+  }
+
   renderMembers(list);
 }
 
@@ -273,13 +282,19 @@ function updateFilterCounts() {
   document.getElementById('chipCardCollected').textContent = `✅ Collected${cardCollected ? ` (${cardCollected})` : ''}`;
 }
 
-document.querySelectorAll('.filter-chip').forEach(chip => {
+document.querySelectorAll('.filter-chip:not(.sort-chip)').forEach(chip => {
   chip.addEventListener('click', () => {
     activeFilter = chip.dataset.filter;
-    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.filter-chip:not(.sort-chip)').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
     applyFilters();
   });
+});
+
+document.getElementById('chipSortNewest').addEventListener('click', () => {
+  activeSort = activeSort === 'newest' ? 'default' : 'newest';
+  document.getElementById('chipSortNewest').classList.toggle('active', activeSort === 'newest');
+  applyFilters();
 });
 
 document.getElementById('searchInput').addEventListener('input', () => applyFilters());

@@ -414,6 +414,11 @@ a { color: var(--accent); }
 .filter-chip--card-collected.active,
 .filter-chip--card-collected:hover { background: rgba(62,207,110,0.12); border-color: #3ecf6e; }
 
+/* Sort chip */
+.filter-chip--sort { border-color: rgba(168,85,247,0.4); color: #a855f7; }
+.filter-chip--sort:hover { background: rgba(168,85,247,0.1); border-color: #a855f7; }
+.filter-chip--sort.active { background: rgba(168,85,247,0.15); color: #c084fc; border-color: #a855f7; }
+
 /* Auth key section in detail modal */
 .auth-key-display {
   display: flex;
