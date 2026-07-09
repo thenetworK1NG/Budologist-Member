@@ -157,6 +157,15 @@ function renderMembers(list) {
 
   if (!list.length) {
     grid.innerHTML = '';
+    const p    = empty.querySelector('p');
+    const span = empty.querySelector('span');
+    if (allMembers.length === 0) {
+      p.textContent    = 'No members yet';
+      span.textContent = 'Use the Add Member tab to register your first member';
+    } else {
+      p.textContent    = 'No results found';
+      span.textContent = 'Try a different search or filter';
+    }
     empty.hidden = false;
     return;
   }
@@ -297,15 +306,32 @@ function openDetail(id) {
   document.getElementById('detailExpiry').textContent   = fmt(m.expiryDate);
 
   /* Auth key */
-  const authKeyWrap = document.getElementById('detailAuthKeyWrap');
-  const authKeyEl   = document.getElementById('detailAuthKey');
+  const authKeyWrap   = document.getElementById('detailAuthKeyWrap');
+  const authKeyEl     = document.getElementById('detailAuthKey');
+  const noKeyWrap     = document.getElementById('detailNoKeyWrap');
   if (m.authKey) {
     authKeyEl.textContent = m.authKey;
     authKeyWrap.hidden = false;
+    noKeyWrap.hidden   = true;
   } else {
-    authKeyEl.textContent = '—';
     authKeyWrap.hidden = true;
+    noKeyWrap.hidden   = false;
   }
+
+  /* Change Key / Add Key buttons — open edit modal focused on key field */
+  function openEditForKey() {
+    openEditModal(m.id);
+    setTimeout(() => {
+      const keyInput = document.getElementById('editAuthKey');
+      if (keyInput) {
+        keyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        /* Auto-activate the manual entry mode */
+        document.getElementById('setKeyManuallyBtn').click();
+      }
+    }, 120);
+  }
+  document.getElementById('detailChangeKeyBtn').onclick = openEditForKey;
+  document.getElementById('detailAddKeyBtn').onclick    = openEditForKey;
 
   /* Card status */
   const csEl = document.getElementById('detailCardStatus');
@@ -318,6 +344,9 @@ function openDetail(id) {
   document.getElementById('detailTotalSpent').textContent =
     'R\u202f' + spent.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   document.getElementById('detailPurchaseCount').textContent = m.purchaseCount || 0;
+
+  /* Load and render individual purchase history */
+  loadMemberPurchaseHistory(id);
 
   const typeEl = document.getElementById('detailType');
   typeEl.textContent = m.membershipType;
@@ -340,7 +369,85 @@ function openDetail(id) {
     if (dataUrl) { imgEl.src = dataUrl; imgWrap.hidden = false; }
   }).catch(() => {});
 
+  /* Optional ID photo capture from the detail view */
+  document.getElementById('detailCapturePhotoBtn').onclick = async () => {
+    const result = await initCamera(m.memberName, m.idNumber, m.memberNumber);
+    if (result === 'captured' || result === 'file') {
+      getIdImageLocally(m.memberNumber).then(dataUrl => {
+        if (dataUrl) { imgEl.src = dataUrl; imgWrap.hidden = false; }
+      });
+      showToast('ID photo saved to this device.', 'success');
+    }
+  };
+
   document.getElementById('memberDetailModal').hidden = false;
+}
+
+/* ─── Member Purchase History ────────────────────────────── */
+const CAT_LABELS = {
+  weed: 'Weed', edibles: 'Edibles', vapes: 'Vapes', joints: 'Joints', dabs: 'Dabs'
+};
+
+function fmtSaleDate(date) {
+  if (!date) return '—';
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) +
+    ' ' + d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtMoney(num) {
+  return 'R\u202f' + Number(num || 0).toLocaleString('en-ZA', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  });
+}
+
+async function loadMemberPurchaseHistory(memberId) {
+  const loader = document.getElementById('psHistoryLoader');
+  const list   = document.getElementById('psHistoryList');
+  if (!loader || !list) return;
+
+  loader.hidden = false;
+  list.innerHTML = '';
+
+  try {
+    const purchases = await getMemberSales(memberId);
+    loader.hidden = true;
+
+    if (!purchases.length) {
+      list.innerHTML = '<div class="ps-history-empty">No purchases recorded yet</div>';
+      return;
+    }
+
+    list.innerHTML = purchases.map(p => {
+      const itemLines = p.items.map(item => {
+        const qty    = Number(item.quantity || 0);
+        const qtyFmt = qty % 1 === 0 ? String(qty) : qty.toFixed(2);
+        const qtyStr = item.unit ? `${qtyFmt} ${item.unit}` : qtyFmt;
+        const cat    = CAT_LABELS[item.category] || item.category || '';
+        return `
+          <div class="ps-purchase-line">
+            <span class="ps-hi-name">${esc(item.itemName)}</span>
+            <span class="ps-hi-cat cat-${esc(item.category)}">${esc(cat)}</span>
+            <span class="ps-hi-qty">${esc(qtyStr)}</span>
+            ${item.note ? `<span class="ps-hi-note">"${esc(item.note)}"</span>` : ''}
+            ${item.total ? `<span class="ps-hi-line-total">${esc(fmtMoney(item.total))}</span>` : ''}
+          </div>`;
+      }).join('');
+
+      return `
+        <div class="ps-history-item ps-history-purchase">
+          <div class="ps-hi-left">
+            <div class="ps-purchase-items">${itemLines}</div>
+            <div class="ps-hi-date">${esc(fmtSaleDate(p.soldAt))}</div>
+          </div>
+          <div class="ps-hi-total">${esc(fmtMoney(p.grandTotal))}</div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+    loader.hidden = true;
+    list.innerHTML = '<div class="ps-history-empty">Could not load purchases</div>';
+  }
 }
 
 function closeDetail() {
@@ -382,12 +489,73 @@ async function confirmClearHistory(id) {
     /* Refresh the stats displayed in the open modal */
     document.getElementById('detailTotalSpent').textContent    = 'R\u202f0.00';
     document.getElementById('detailPurchaseCount').textContent = '0';
+    /* Reload the purchase history list */
+    loadMemberPurchaseHistory(id);
     showToast('Purchase history cleared.', 'success');
   } catch (err) {
     console.error(err);
     showToast('Could not clear history.', 'error');
   }
 }
+
+/* ─── Top Spenders ───────────────────────────────────────── */
+function renderTopSpenders() {
+  const list = document.getElementById('topSpendersList');
+  if (!list) return;
+
+  const ranked = [...allMembers]
+    .filter(m => (m.totalSpent || 0) > 0)
+    .sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0));
+
+  if (!ranked.length) {
+    list.innerHTML = '<div class="ts-empty">No purchase data yet</div>';
+    return;
+  }
+
+  const MEDALS = ['🥇', '🥈', '🥉'];
+
+  list.innerHTML = ranked.map((m, i) => {
+    const spent = Number(m.totalSpent || 0);
+    const spentFmt = 'R\u202f' + spent.toLocaleString('en-ZA', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    });
+    const st      = memberStatus(m);
+    const medal   = MEDALS[i] || `<span class="ts-rank">${i + 1}</span>`;
+    const barPct  = ranked[0].totalSpent > 0
+      ? Math.round((spent / ranked[0].totalSpent) * 100) : 0;
+
+    return `
+      <div class="ts-row" role="button" tabindex="0"
+           onclick="openDetail('${esc(m.id)}')"
+           onkeydown="if(event.key==='Enter')openDetail('${esc(m.id)}')">
+        <div class="ts-medal">${medal}</div>
+        <div class="ts-info">
+          <div class="ts-name">${esc(m.memberName) || '<em style="opacity:.5">No name</em>'}</div>
+          <div class="ts-sub">
+            <span class="ts-num">${esc(m.memberNumber)}</span>
+            <span class="ts-purchases">${m.purchaseCount || 0} purchase${(m.purchaseCount || 0) === 1 ? '' : 's'}</span>
+            <span class="chip chip--${st} ts-status-chip">${st === 'expiring' ? 'Expiring' : st.charAt(0).toUpperCase() + st.slice(1)}</span>
+          </div>
+          <div class="ts-bar-wrap">
+            <div class="ts-bar" style="width:${barPct}%"></div>
+          </div>
+        </div>
+        <div class="ts-spent">${esc(spentFmt)}</div>
+      </div>`;
+  }).join('');
+}
+
+let topSpendersOpen = false;
+document.getElementById('topSpendersToggle').addEventListener('click', () => {
+  topSpendersOpen = !topSpendersOpen;
+  const list     = document.getElementById('topSpendersList');
+  const chevron  = document.getElementById('topSpendersChevron');
+  const toggle   = document.getElementById('topSpendersToggle');
+  list.hidden    = !topSpendersOpen;
+  toggle.setAttribute('aria-expanded', String(topSpendersOpen));
+  chevron.style.transform = topSpendersOpen ? 'rotate(180deg)' : '';
+  if (topSpendersOpen) renderTopSpenders();
+});
 
 /* ─── Analytics ──────────────────────────────────────────── */
 function renderAnalytics() {
@@ -407,6 +575,7 @@ function renderAnalytics() {
 
   buildMonthlyChart();
   buildTypeChart(basic, premium);
+  if (topSpendersOpen) renderTopSpenders();
 }
 
 const CHART_DEFAULTS = {
@@ -552,22 +721,21 @@ document.getElementById('addMemberForm').addEventListener('submit', async e => {
 
   /* Basic validation */
   if (!formData.employeeName || !formData.membershipType || !formData.memberName ||
-      !formData.idNumber || !formData.date || !formData.phoneNumber) {
+      !formData.date || !formData.phoneNumber) {
     showToast('Please fill in all required fields.', 'error');
     btn.disabled = false;
-    btn.innerHTML = '+ Add Member &amp; Capture ID';
+    btn.innerHTML = '+ Add Member';
     return;
   }
 
   if (!isAutoNumber && !formData.memberNumber.trim()) {
     showToast('Please enter a member number.', 'error');
     btn.disabled = false;
-    btn.innerHTML = '+ Add Member &amp; Capture ID';
+    btn.innerHTML = '+ Add Member';
     return;
   }
 
   const savedName = formData.memberName;
-  const savedId   = formData.idNumber;
 
   try {
     const { memberNumber } = await addMember(formData, isAutoNumber);
@@ -586,15 +754,15 @@ document.getElementById('addMemberForm').addEventListener('submit', async e => {
     document.getElementById('formMemberNumber').readOnly = true;
     await refreshMemberNumber();
 
-    /* Open camera to capture ID photo */
-    await initCamera(savedName, savedId, memberNumber);
+    /* Switch to members tab to see the new member */
+    switchTab('members');
 
   } catch (err) {
     console.error(err);
     showToast('Failed to add member. Please try again.', 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '+ Add Member &amp; Capture ID';
+    btn.innerHTML = '+ Add Member';
   }
 });
 
@@ -621,6 +789,8 @@ function openEditModal(id) {
   document.getElementById('editIdNumber').value        = m.idNumber        || '';
   document.getElementById('editPhone').value           = m.phoneNumber     || '';
   document.getElementById('editAuthKey').value          = m.authKey         || '';
+  document.getElementById('editAuthKey').readOnly        = true;
+  document.getElementById('authKeyHint').textContent     = 'Unique 5-digit key printed on member\'s card. Click ✏️ Set Key to type one manually, or 🎲 Generate for a random unique key.';
   document.getElementById('editCardStatus').value       = m.cardStatus      || 'none';
 
   const toInputDate = d => {
@@ -668,6 +838,22 @@ document.getElementById('saveEditBtn').addEventListener('click', async () => {
     return;
   }
 
+  /* Validate auth key: must be empty or exactly 5 digits */
+  const keyVal = updates.authKey.trim();
+  if (keyVal && !/^\d{5}$/.test(keyVal)) {
+    showToast('Card key must be exactly 5 digits (e.g. 04523).', 'error');
+    return;
+  }
+
+  /* Check for duplicate key (ignore current member's own key) */
+  if (keyVal) {
+    const duplicate = allMembers.find(m => m.id !== id && m.authKey === keyVal);
+    if (duplicate) {
+      showToast(`Key ${keyVal} is already used by ${duplicate.memberName || duplicate.memberNumber}. Choose a different key.`, 'error');
+      return;
+    }
+  }
+
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-sm"></span> Saving…';
 
@@ -700,6 +886,9 @@ document.getElementById('generateAuthKeyBtn').addEventListener('click', async ()
   try {
     const key = await generateUniqueAuthKey();
     input.value = key;
+    input.readOnly = true;
+    document.getElementById('authKeyHint').textContent =
+      `Auth key ${key} generated — remember to Save Changes.`;
     showToast(`Auth key ${key} generated — remember to Save Changes.`, 'success');
   } catch (err) {
     console.error(err);
@@ -708,6 +897,22 @@ document.getElementById('generateAuthKeyBtn').addEventListener('click', async ()
     btn.disabled = false;
     btn.innerHTML = prev;
   }
+});
+
+/* ─── Set Key Manually Button ────────────────────────────── */
+document.getElementById('setKeyManuallyBtn').addEventListener('click', () => {
+  const input   = document.getElementById('editAuthKey');
+  const hint    = document.getElementById('authKeyHint');
+  input.readOnly = false;
+  input.value   = '';
+  input.focus();
+  hint.textContent = 'Type a 5-digit number (e.g. 04523). Duplicates will be caught on Save.';
+  showToast('Type your 5-digit key and click Save Changes.', 'info');
+});
+
+/* Allow only digits in the auth key field */
+document.getElementById('editAuthKey').addEventListener('input', e => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5);
 });
 
 /* ─── Bootstrap ──────────────────────────────────────────── */

@@ -190,7 +190,7 @@ async function updateMember(id, updates) {
   if (updates.idNumber       !== undefined) payload.idNumber       = updates.idNumber.trim();
   if (updates.phoneNumber    !== undefined) payload.phoneNumber    = updates.phoneNumber.trim();
   if (updates.authKey        !== undefined) payload.authKey        = updates.authKey.trim();
-  if (updates.cardStatus     !== undefined) payload.cardStatus     = updates.cardStatus;  if (updates.cardStatus     !== undefined) payload.cardStatus     = updates.cardStatus;
+  if (updates.cardStatus     !== undefined) payload.cardStatus     = updates.cardStatus;
   if (updates.dateAdded) {
     const [y, mo, d] = updates.dateAdded.split('-').map(Number);
     payload.dateAdded = new Date(y, mo - 1, d).getTime();
@@ -215,4 +215,27 @@ async function clearMemberPurchaseHistory(id) {
   });
 }
 
+/**
+ * Fetch all purchases linked to a specific member from /purchases.
+ * Returns newest first.
+ */
+async function getMemberSales(memberId) {
+  const snap = await db.ref('purchases').orderByChild('memberId').equalTo(memberId).once('value');
+  const purchases = [];
+  snap.forEach(child => {
+    const d = child.val();
+    const items = d.items
+      ? (Array.isArray(d.items) ? d.items : Object.values(d.items))
+      : [];
+    purchases.push({
+      id:         child.key,
+      items,
+      grandTotal: d.grandTotal || 0,
+      itemCount:  d.itemCount  || items.length,
+      soldAt:     d.soldAt ? new Date(d.soldAt) : null
+    });
+  });
+  purchases.sort((a, b) => (b.soldAt ? b.soldAt.getTime() : 0) - (a.soldAt ? a.soldAt.getTime() : 0));
+  return purchases;
+}
 

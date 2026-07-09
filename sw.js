@@ -1,7 +1,7 @@
 /* ============================================================
    Budologist Service Worker — cache-first for local assets
    ============================================================ */
-const CACHE = 'budologist-v2';
+const CACHE = 'budologist-v3';
 
 const LOCAL_ASSETS = [
   './index.html',
